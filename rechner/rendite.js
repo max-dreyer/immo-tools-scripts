@@ -1,37 +1,38 @@
 // ============================================
-// rendite.js — Mietrendite-Rechner (Vollversion)
+// rendite.js — Mietrendite-Rechner (v2)
 // Benötigt: utils.js (global eingebunden)
+//
+// Webflow-Struktur:
+// <form data-tool="rendite">
+//   Inputs mit IDs: rendite-input-*
+//   Outputs mit IDs: rendite-output-*
+//   Button mit Klasse: .btn-berechnen
+//   Ergebnis-Div mit Klasse: .container-ergebnis
+//   Fehler-Div mit Klasse: .error-message
+// </form>
 // ============================================
 
 (function () {
-    const T = 'rendite'; // Tool-Prefix
+    const T = 'rendite';
   
     function berechnen() {
-      // ── Fehler & Ergebnis zurücksetzen ──
-      ImmoTools.hideError(T);
-      ImmoTools.hide(`${T}-container-ergebnis`);
-      ImmoTools.clearValidation(T);
   
-      // ── 1. EINGABEN HOLEN ──
+      // ── 1. EINGABEN ──
   
-      // Basis
-      const kaufpreis       = ImmoTools.getInputValue(`${T}-input-kaufpreis`);
-      const kaufnebenkosten = ImmoTools.getInputValue(`${T}-input-kaufnebenkosten`);
-      const kaltmiete       = ImmoTools.getInputValue(`${T}-input-kaltmiete`);
+      const kaufpreis          = ImmoTools.getInputValue(`${T}-input-kaufpreis`);
+      const kaufnebenkosten    = ImmoTools.getInputValue(`${T}-input-kaufnebenkosten`);
+      const kaltmiete          = ImmoTools.getInputValue(`${T}-input-kaltmiete`);
   
-      // Erweitert
-      const verwaltungMonat   = ImmoTools.getInputValue(`${T}-input-verwaltung`);
+      const verwaltungMonat    = ImmoTools.getInputValue(`${T}-input-verwaltung`);
       const instandhaltungJahr = ImmoTools.getInputValue(`${T}-input-instandhaltung`);
-      const leerstandProzent  = ImmoTools.getInputValue(`${T}-input-leerstand`);
+      const leerstandProzent   = ImmoTools.getInputValue(`${T}-input-leerstand`);
   
-      // Finanzierung
-      const eigenkapital = ImmoTools.getInputValue(`${T}-input-eigenkapital`);
-      const darlehenszins = ImmoTools.getInputValue(`${T}-input-zins`);
-      const tilgungssatz  = ImmoTools.getInputValue(`${T}-input-tilgung`);
+      const eigenkapital       = ImmoTools.getInputValue(`${T}-input-eigenkapital`);
+      const darlehenszins      = ImmoTools.getInputValue(`${T}-input-zins`);
+      const tilgungssatz       = ImmoTools.getInputValue(`${T}-input-tilgung`);
   
-      // Steuer
-      const steuersatz = ImmoTools.getInputValue(`${T}-input-steuersatz`);
-      const afaProzent = ImmoTools.getInputValue(`${T}-input-afa`);
+      const steuersatz         = ImmoTools.getInputValue(`${T}-input-steuersatz`);
+      const afaProzent         = ImmoTools.getInputValue(`${T}-input-afa`);
   
       // ── 2. VALIDIERUNG ──
   
@@ -53,80 +54,60 @@
   
       // ── 3. BERECHNUNGEN ──
   
-      // Gesamtkosten
-      const nebenkostenBetrag = kaufpreis * (kaufnebenkosten / 100);
-      const gesamtkosten = kaufpreis + nebenkostenBetrag;
+      const nebenkostenBetrag   = kaufpreis * (kaufnebenkosten / 100);
+      const gesamtkosten        = kaufpreis + nebenkostenBetrag;
   
-      // Jahresmiete
-      const jahresBruttoMiete = kaltmiete * 12;
-      const leerstandAbzug = jahresBruttoMiete * (leerstandProzent / 100);
+      const jahresBruttoMiete   = kaltmiete * 12;
+      const leerstandAbzug      = jahresBruttoMiete * (leerstandProzent / 100);
       const jahresEffektivMiete = jahresBruttoMiete - leerstandAbzug;
   
-      // Jährliche Kosten
-      const verwaltungJahr = verwaltungMonat * 12;
-      const kostenGesamt = verwaltungJahr + instandhaltungJahr;
+      const verwaltungJahr      = verwaltungMonat * 12;
+      const kostenGesamt        = verwaltungJahr + instandhaltungJahr;
+      const jahresNettoMiete    = jahresEffektivMiete - kostenGesamt;
   
-      // Netto-Mieteinnahmen (vor Finanzierung & Steuer)
-      const jahresNettoMiete = jahresEffektivMiete - kostenGesamt;
+      const bruttoRendite       = (jahresBruttoMiete / gesamtkosten) * 100;
+      const nettoRendite        = (jahresNettoMiete / gesamtkosten) * 100;
+      const kaufpreisfaktor     = gesamtkosten / jahresBruttoMiete;
   
-      // Bruttorendite
-      const bruttoRendite = (jahresBruttoMiete / gesamtkosten) * 100;
-  
-      // Nettorendite (vor Finanzierung & Steuer)
-      const nettoRendite = (jahresNettoMiete / gesamtkosten) * 100;
-  
-      // Kaufpreisfaktor
-      const kaufpreisfaktor = gesamtkosten / jahresBruttoMiete;
-  
-      // ── Finanzierung ──
-      const darlehenssumme = gesamtkosten - eigenkapital;
-      const jahresZins = darlehenssumme * (darlehenszins / 100);
-      const jahresTilgung = darlehenssumme * (tilgungssatz / 100);
+      const darlehenssumme  = gesamtkosten - eigenkapital;
+      const jahresZins      = darlehenssumme * (darlehenszins / 100);
+      const jahresTilgung   = darlehenssumme * (tilgungssatz / 100);
       const jahresAnnuitaet = jahresZins + jahresTilgung;
-      const monatsrate = jahresAnnuitaet / 12;
+      const monatsrate      = jahresAnnuitaet / 12;
   
-      // Cashflow (vor Steuer)
-      const cashflowVorSteuerJahr = jahresNettoMiete - jahresAnnuitaet;
+      const cashflowVorSteuerJahr  = jahresNettoMiete - jahresAnnuitaet;
       const cashflowVorSteuerMonat = cashflowVorSteuerJahr / 12;
   
-      // ── Steuer ──
-      const afaBetrag = kaufpreis * (afaProzent / 100); // AfA nur auf Gebäude, vereinfacht auf Kaufpreis
-      const zuVersteuern = jahresNettoMiete - jahresZins - afaBetrag;
-      const steuerLast = zuVersteuern > 0 ? zuVersteuern * (steuersatz / 100) : 0;
+      const afaBetrag       = kaufpreis * (afaProzent / 100);
+      const zuVersteuern    = jahresNettoMiete - jahresZins - afaBetrag;
+      const steuerLast      = zuVersteuern > 0 ? zuVersteuern * (steuersatz / 100) : 0;
       const steuerErsparnis = zuVersteuern < 0 ? Math.abs(zuVersteuern) * (steuersatz / 100) : 0;
   
-      // Cashflow (nach Steuer)
-      const cashflowNachSteuerJahr = cashflowVorSteuerJahr - steuerLast + steuerErsparnis;
+      const cashflowNachSteuerJahr  = cashflowVorSteuerJahr - steuerLast + steuerErsparnis;
       const cashflowNachSteuerMonat = cashflowNachSteuerJahr / 12;
   
-      // Eigenkapitalrendite
       const ekEinsatz = eigenkapital > 0 ? eigenkapital : gesamtkosten;
       const eigenkapitalRendite = (cashflowNachSteuerJahr / ekEinsatz) * 100;
   
-      // ── 4. ERGEBNISSE ANZEIGEN ──
+      // ── 4. AUSGABEN ──
   
-      // Hauptkennzahlen
       ImmoTools.setOutput(`${T}-output-brutto`, ImmoTools.formatPercent(bruttoRendite));
       ImmoTools.setOutput(`${T}-output-netto`, ImmoTools.formatPercent(nettoRendite));
       ImmoTools.setOutput(`${T}-output-faktor`, ImmoTools.formatNumber(kaufpreisfaktor, 1) + 'x');
       ImmoTools.setOutput(`${T}-output-gesamtkosten`, ImmoTools.formatCurrencyShort(gesamtkosten));
   
-      // Finanzierung
       ImmoTools.setOutput(`${T}-output-darlehenssumme`, ImmoTools.formatCurrencyShort(darlehenssumme));
       ImmoTools.setOutput(`${T}-output-monatsrate`, ImmoTools.formatCurrency(monatsrate));
       ImmoTools.setOutput(`${T}-output-jahresannuitaet`, ImmoTools.formatCurrencyShort(jahresAnnuitaet));
   
-      // Cashflow
       ImmoTools.setOutput(`${T}-output-cashflow-vor-steuer`, ImmoTools.formatCurrency(cashflowVorSteuerMonat));
       ImmoTools.setOutput(`${T}-output-cashflow-nach-steuer`, ImmoTools.formatCurrency(cashflowNachSteuerMonat));
       ImmoTools.setOutput(`${T}-output-cashflow-jahr`, ImmoTools.formatCurrencyShort(cashflowNachSteuerJahr));
   
-      // Steuer
       ImmoTools.setOutput(`${T}-output-afa-betrag`, ImmoTools.formatCurrencyShort(afaBetrag));
       ImmoTools.setOutput(`${T}-output-steuer`, ImmoTools.formatCurrencyShort(steuerLast));
       ImmoTools.setOutput(`${T}-output-steuerersparnis`, ImmoTools.formatCurrencyShort(steuerErsparnis));
   
-      // Eigenkapitalrendite
       ImmoTools.setOutput(`${T}-output-ek-rendite`, ImmoTools.formatPercent(eigenkapitalRendite));
   
       // ── 5. BEWERTUNGEN ──
@@ -166,7 +147,7 @@
         { min: 0, label: 'Schwach', cls: 'is-schwach' }
       ]);
   
-      // ── 6. JAHRESÜBERSICHT TABELLE ──
+      // ── 6. JAHRESÜBERSICHT ──
   
       erstelleJahresTabelle({
         darlehenssumme,
@@ -174,41 +155,29 @@
         tilgungssatz,
         jahresNettoMiete,
         steuersatz,
-        afaBetrag,
-        kaufpreis,
-        gesamtkosten
+        afaBetrag
       });
   
       // ── Ergebnis einblenden ──
-      ImmoTools.show(`${T}-container-ergebnis`);
+      ImmoTools.show(T, 'container-ergebnis');
   
-      const container = document.getElementById(`${T}-container-ergebnis`);
+      const container = ImmoTools.queryTool(T, 'container-ergebnis');
       if (container) {
         container.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }
   
   
-    // ── BEWERTUNGS-HELPER ──
-  
     function setBewertung(id, value, stufen) {
       const el = document.getElementById(id);
       if (!el) return;
   
-      // Alle Bewertungs-Klassen entfernen
       el.classList.remove('is-sehr-gut', 'is-gut', 'is-akzeptabel', 'is-schwach');
   
-      let ergebnis = stufen[stufen.length - 1]; // Fallback: letzte Stufe
-  
+      let ergebnis = stufen[stufen.length - 1];
       for (const stufe of stufen) {
-        if (stufe.min !== undefined && value >= stufe.min) {
-          ergebnis = stufe;
-          break;
-        }
-        if (stufe.max !== undefined && value <= stufe.max) {
-          ergebnis = stufe;
-          break;
-        }
+        if (stufe.min !== undefined && value >= stufe.min) { ergebnis = stufe; break; }
+        if (stufe.max !== undefined && value <= stufe.max) { ergebnis = stufe; break; }
       }
   
       el.textContent = ergebnis.label;
@@ -216,13 +185,11 @@
     }
   
   
-    // ── JAHRESÜBERSICHT TABELLE ──
-  
     function erstelleJahresTabelle(params) {
       const tableBody = document.getElementById(`${T}-tabelle-body`);
       if (!tableBody) return;
   
-      tableBody.innerHTML = ''; // Zurücksetzen
+      tableBody.innerHTML = '';
   
       const jahre = 10;
       let restschuld = params.darlehenssumme;
@@ -230,13 +197,12 @@
       let gesamtTilgung = 0;
   
       for (let jahr = 1; jahr <= jahre; jahr++) {
-        const zinsJahr = restschuld * (params.darlehenszins / 100);
+        const zinsJahr    = restschuld * (params.darlehenszins / 100);
         const tilgungJahr = restschuld * (params.tilgungssatz / 100);
-        const annuitaet = zinsJahr + tilgungJahr;
+        const annuitaet   = zinsJahr + tilgungJahr;
   
-        // Steuerliche Betrachtung pro Jahr
         const zuVersteuern = params.jahresNettoMiete - zinsJahr - params.afaBetrag;
-        const steuer = zuVersteuern > 0 ? zuVersteuern * (params.steuersatz / 100) : 0;
+        const steuer    = zuVersteuern > 0 ? zuVersteuern * (params.steuersatz / 100) : 0;
         const ersparnis = zuVersteuern < 0 ? Math.abs(zuVersteuern) * (params.steuersatz / 100) : 0;
   
         const cashflow = params.jahresNettoMiete - annuitaet - steuer + ersparnis;
@@ -258,14 +224,11 @@
         tableBody.appendChild(row);
       }
   
-      // Zusammenfassung unterhalb der Tabelle
       ImmoTools.setOutput(`${T}-output-gesamt-zins`, ImmoTools.formatCurrencyShort(gesamtZins));
       ImmoTools.setOutput(`${T}-output-gesamt-tilgung`, ImmoTools.formatCurrencyShort(gesamtTilgung));
       ImmoTools.setOutput(`${T}-output-restschuld-10`, ImmoTools.formatCurrencyShort(restschuld));
     }
   
-  
-    // ── INITIALISIERUNG ──
   
     ImmoTools.initTool(T, berechnen);
   

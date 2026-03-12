@@ -1,12 +1,35 @@
 // ============================================
 // ImmoTools — Global Utility Library
-// utils.js v1.0.0
+// utils.js v2.0.0
+//
+// Architektur: Jedes Tool lebt in einem <form data-tool="toolname">
+// Inputs/Outputs werden per ID angesteuert.
+// Alles andere (Buttons, Container) per Klasse innerhalb des Forms.
 // ============================================
 
 const ImmoTools = {
-    // FORMATIERUNG
+
+    // ==========================================
+    // TOOL-SCOPE
+    // ==========================================
   
-    // Zahl → "250.000,00 €"
+    // Form-Element eines Tools holen
+    getForm(toolName) {
+      return document.querySelector(`form[data-tool="${toolName}"]`);
+    },
+  
+    // Element innerhalb eines Tools per Klasse finden
+    queryTool(toolName, className) {
+      const form = this.getForm(toolName);
+      if (!form) return null;
+      return form.querySelector(`.${className}`);
+    },
+  
+  
+    // ==========================================
+    // FORMATIERUNG
+    // ==========================================
+  
     formatCurrency(value) {
       return new Intl.NumberFormat('de-DE', {
         style: 'currency',
@@ -16,7 +39,6 @@ const ImmoTools = {
       }).format(value);
     },
   
-    // Zahl → "250.000 €" (ohne Cent)
     formatCurrencyShort(value) {
       return new Intl.NumberFormat('de-DE', {
         style: 'currency',
@@ -26,7 +48,6 @@ const ImmoTools = {
       }).format(value);
     },
   
-    // Zahl → "4,52 %"
     formatPercent(value, decimals = 2) {
       return new Intl.NumberFormat('de-DE', {
         minimumFractionDigits: decimals,
@@ -34,7 +55,6 @@ const ImmoTools = {
       }).format(value) + ' %';
     },
   
-    // Zahl → "1.250" oder "1.250,50"
     formatNumber(value, decimals = 0) {
       return new Intl.NumberFormat('de-DE', {
         minimumFractionDigits: decimals,
@@ -42,17 +62,14 @@ const ImmoTools = {
       }).format(value);
     },
   
-    // Zahl → "12,5x"
     formatFactor(value, decimals = 1) {
       return this.formatNumber(value, decimals) + 'x';
     },
   
-    // Quadratmeter → "85,5 m²"
     formatArea(value, decimals = 1) {
       return this.formatNumber(value, decimals) + ' m²';
     },
   
-    // Monate → "10 Jahre, 3 Monate"
     formatDuration(months) {
       const years = Math.floor(months / 12);
       const rest = Math.round(months % 12);
@@ -66,8 +83,6 @@ const ImmoTools = {
     // INPUT-HANDLING
     // ==========================================
   
-    // Input-Wert als Zahl holen
-    // Unterstützt deutsche Formate: "250.000,50" → 250000.5
     getInputValue(id, fallback = 0) {
       const el = document.getElementById(id);
       if (!el) {
@@ -76,30 +91,23 @@ const ImmoTools = {
       }
       const raw = el.value.trim();
       if (raw === '') return fallback;
-      // Deutsche Formatierung normalisieren
       const normalized = raw.replace(/\./g, '').replace(',', '.');
       const val = parseFloat(normalized);
       return isNaN(val) ? fallback : val;
     },
   
-    // Select-Wert holen
     getSelectValue(id, fallback = '') {
       const el = document.getElementById(id);
-      if (!el) {
-        console.warn(`ImmoTools: Element #${id} nicht gefunden`);
-        return fallback;
-      }
+      if (!el) return fallback;
       return el.value || fallback;
     },
   
-    // Checkbox/Toggle-Status holen
     getToggleValue(id) {
       const el = document.getElementById(id);
       if (!el) return false;
       return el.checked;
     },
   
-    // Input-Wert setzen
     setInputValue(id, value) {
       const el = document.getElementById(id);
       if (el) el.value = value;
@@ -110,36 +118,32 @@ const ImmoTools = {
     // OUTPUT-HANDLING
     // ==========================================
   
-    // Text in Element schreiben
     setOutput(id, value) {
       const el = document.getElementById(id);
       if (el) el.textContent = value;
     },
   
-    // HTML in Element schreiben (für formatierte Ausgaben)
     setOutputHTML(id, html) {
       const el = document.getElementById(id);
       if (el) el.innerHTML = html;
     },
   
-    // Element einblenden
-    show(id) {
-      const el = document.getElementById(id);
+    // Container per Klasse innerhalb des Tool-Forms ein-/ausblenden
+    show(toolName, className) {
+      const el = this.queryTool(toolName, className);
       if (el) el.classList.remove('is-hidden');
     },
   
-    // Element ausblenden
-    hide(id) {
-      const el = document.getElementById(id);
+    hide(toolName, className) {
+      const el = this.queryTool(toolName, className);
       if (el) el.classList.add('is-hidden');
     },
   
-    // Element ein-/ausschalten
-    toggle(id, visible) {
+    toggle(toolName, className, visible) {
       if (visible) {
-        this.show(id);
+        this.show(toolName, className);
       } else {
-        this.hide(id);
+        this.hide(toolName, className);
       }
     },
   
@@ -148,8 +152,6 @@ const ImmoTools = {
     // VALIDIERUNG
     // ==========================================
   
-    // Mehrere Inputs auf einmal validieren
-    // Gibt Array mit Fehlermeldungen zurück (leer = alles ok)
     validateInputs(fields) {
       const errors = [];
       fields.forEach(({ id, label, min, max, required }) => {
@@ -173,34 +175,31 @@ const ImmoTools = {
       return errors;
     },
   
-    // Input visuell als fehlerhaft markieren
     markInvalid(id) {
       const el = document.getElementById(id);
       if (el) el.classList.add('is-invalid');
     },
   
-    // Input visuell als ok markieren
     markValid(id) {
       const el = document.getElementById(id);
       if (el) el.classList.remove('is-invalid');
     },
   
-    // Alle Inputs eines Tools zurücksetzen
-    clearValidation(toolPrefix) {
-      const wrapper = document.getElementById(`${toolPrefix}-wrapper`);
-      if (!wrapper) return;
-      wrapper.querySelectorAll('.is-invalid').forEach(el => {
+    clearValidation(toolName) {
+      const form = this.getForm(toolName);
+      if (!form) return;
+      form.querySelectorAll('.is-invalid').forEach(el => {
         el.classList.remove('is-invalid');
       });
     },
   
   
     // ==========================================
-    // FEHLERMELDUNGEN
+    // FEHLERMELDUNGEN (per Klasse im Form)
     // ==========================================
   
-    showError(toolPrefix, message) {
-      const el = document.getElementById(`${toolPrefix}-error-message`);
+    showError(toolName, message) {
+      const el = this.queryTool(toolName, 'error-message');
       if (el) {
         if (Array.isArray(message)) {
           el.textContent = message.join(' ');
@@ -211,68 +210,75 @@ const ImmoTools = {
       }
     },
   
-    hideError(toolPrefix) {
-      const el = document.getElementById(`${toolPrefix}-error-message`);
+    hideError(toolName) {
+      const el = this.queryTool(toolName, 'error-message');
       if (el) el.classList.add('is-hidden');
     },
   
   
     // ==========================================
-    // TOOL-INITIALISIERUNG (Boilerplate-Reduktion)
+    // TOOL-INITIALISIERUNG
     // ==========================================
   
-    // Standardmäßiges Setup für ein Tool
-    // Bindet Button-Click und Enter-Taste
-    initTool(toolPrefix, berechnungsFn) {
+    initTool(toolName, berechnungsFn) {
       document.addEventListener('DOMContentLoaded', () => {
-        // Berechnen-Button
-        const btn = document.getElementById(`${toolPrefix}-btn-berechnen`);
+        const form = this.getForm(toolName);
+        if (!form) {
+          console.warn(`ImmoTools: Form [data-tool="${toolName}"] nicht gefunden`);
+          return;
+        }
+  
+        // Form-Submit verhindern (kein Reload)
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+        });
+  
+        // Berechnen-Button (Klasse .btn-berechnen innerhalb des Forms)
+        const btn = form.querySelector('.btn-berechnen');
         if (btn) {
-          btn.addEventListener('click', () => {
-            this.clearValidation(toolPrefix);
-            this.hideError(toolPrefix);
-            this.hide(`${toolPrefix}-container-ergebnis`);
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.clearValidation(toolName);
+            this.hideError(toolName);
+            this.hide(toolName, 'container-ergebnis');
             berechnungsFn();
           });
         }
   
-        // Enter-Taste im Tool-Bereich
-        const wrapper = document.getElementById(`${toolPrefix}-wrapper`);
-        if (wrapper) {
-          wrapper.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              this.clearValidation(toolPrefix);
-              this.hideError(toolPrefix);
-              this.hide(`${toolPrefix}-container-ergebnis`);
-              berechnungsFn();
-            }
-          });
-        }
+        // Enter-Taste
+        form.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            this.clearValidation(toolName);
+            this.hideError(toolName);
+            this.hide(toolName, 'container-ergebnis');
+            berechnungsFn();
+          }
+        });
   
-        // Zurücksetzen-Button (optional)
-        const resetBtn = document.getElementById(`${toolPrefix}-btn-reset`);
+        // Zurücksetzen-Button (optional, Klasse .btn-reset)
+        const resetBtn = form.querySelector('.btn-reset');
         if (resetBtn) {
-          resetBtn.addEventListener('click', () => {
-            this.resetTool(toolPrefix);
+          resetBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.resetTool(toolName);
           });
         }
       });
     },
   
-    // Alle Inputs zurücksetzen
-    resetTool(toolPrefix) {
-      const wrapper = document.getElementById(`${toolPrefix}-wrapper`);
-      if (!wrapper) return;
-      wrapper.querySelectorAll('input').forEach(input => {
+    resetTool(toolName) {
+      const form = this.getForm(toolName);
+      if (!form) return;
+      form.querySelectorAll('input').forEach(input => {
         input.value = '';
       });
-      wrapper.querySelectorAll('select').forEach(select => {
+      form.querySelectorAll('select').forEach(select => {
         select.selectedIndex = 0;
       });
-      this.clearValidation(toolPrefix);
-      this.hideError(toolPrefix);
-      this.hide(`${toolPrefix}-container-ergebnis`);
+      this.clearValidation(toolName);
+      this.hideError(toolName);
+      this.hide(toolName, 'container-ergebnis');
     },
   
   
@@ -280,34 +286,32 @@ const ImmoTools = {
     // ERGEBNIS ANZEIGEN (Shortcut)
     // ==========================================
   
-    // Prüft Validierung und zeigt entweder Fehler oder Ergebnis
-    showResults(toolPrefix, fields, berechnungsFn) {
-      this.clearValidation(toolPrefix);
-      this.hideError(toolPrefix);
-      this.hide(`${toolPrefix}-container-ergebnis`);
+    showResults(toolName, fields, berechnungsFn) {
+      this.clearValidation(toolName);
+      this.hideError(toolName);
+      this.hide(toolName, 'container-ergebnis');
   
       const errors = this.validateInputs(fields);
       if (errors.length > 0) {
-        this.showError(toolPrefix, errors);
+        this.showError(toolName, errors);
         return false;
       }
   
       berechnungsFn();
-      this.show(`${toolPrefix}-container-ergebnis`);
-      // Sanft zum Ergebnis scrollen
-      const container = document.getElementById(`${toolPrefix}-container-ergebnis`);
+      this.show(toolName, 'container-ergebnis');
+  
+      const container = this.queryTool(toolName, 'container-ergebnis');
       if (container) {
-        container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
       return true;
     },
   
   
     // ==========================================
-    // DATEN FÜR RECHNER
+    // STAMMDATEN
     // ==========================================
   
-    // Grunderwerbsteuer nach Bundesland (Stand 2025)
     grunderwerbsteuer: {
       'baden-wuerttemberg': 5.0,
       'bayern': 3.5,
@@ -327,18 +331,15 @@ const ImmoTools = {
       'thueringen': 5.0
     },
   
-    // Notar- und Grundbuchkosten (Richtwerte)
-    notarkostenProzent: 1.5,   // ca. 1,5% vom Kaufpreis
-    grundbuchProzent: 0.5,     // ca. 0,5% vom Kaufpreis
-    maklerProzentKauf: 3.57,   // 3,57% inkl. MwSt (Käuferanteil)
+    notarkostenProzent: 1.5,
+    grundbuchProzent: 0.5,
+    maklerProzentKauf: 3.57,
   
   
     // ==========================================
     // PDF-EXPORT
     // ==========================================
   
-    // Element als PDF herunterladen
-    // Benötigt html2pdf.js (extern einbinden)
     exportPDF(elementId, filename = 'Dokument.pdf', options = {}) {
       if (typeof html2pdf === 'undefined') {
         console.error('ImmoTools: html2pdf.js ist nicht geladen.');
@@ -347,10 +348,7 @@ const ImmoTools = {
       }
   
       const element = document.getElementById(elementId);
-      if (!element) {
-        console.error(`ImmoTools: Element #${elementId} nicht gefunden`);
-        return;
-      }
+      if (!element) return;
   
       const defaultOptions = {
         margin: [10, 10, 10, 10],
@@ -360,16 +358,14 @@ const ImmoTools = {
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
   
-      const mergedOptions = { ...defaultOptions, ...options };
-      html2pdf().set(mergedOptions).from(element).save();
+      html2pdf().set({ ...defaultOptions, ...options }).from(element).save();
     },
   
   
     // ==========================================
-    // LOCALSTORAGE HELPERS
+    // LOCALSTORAGE
     // ==========================================
   
-    // Daten speichern (JSON)
     saveData(key, data) {
       try {
         localStorage.setItem(`immo-${key}`, JSON.stringify(data));
@@ -380,25 +376,20 @@ const ImmoTools = {
       }
     },
   
-    // Daten laden (JSON)
     loadData(key, fallback = null) {
       try {
         const raw = localStorage.getItem(`immo-${key}`);
         return raw ? JSON.parse(raw) : fallback;
       } catch (e) {
-        console.warn('ImmoTools: Fehler beim Laden', e);
         return fallback;
       }
     },
   
-    // Daten löschen
     removeData(key) {
       try {
         localStorage.removeItem(`immo-${key}`);
-      } catch (e) {
-        console.warn('ImmoTools: Fehler beim Löschen', e);
-      }
+      } catch (e) {}
     }
   
   };
-
+  
