@@ -433,24 +433,98 @@ const ImmoTools = {
   
   
     // ==========================================
-    // PDF-EXPORT
+    // PDF-EXPORT (mit eigenem PDF-Layout)
     // ==========================================
+    //
+    // Funktionsweise:
+    // 1. In Webflow einen Div mit Klasse "pdf-container" + "is-hidden" bauen
+    // 2. Darin das PDF-Layout gestalten (Logo, Titel, Branding etc.)
+    // 3. Für jeden Wert der ins PDF soll: data-mirror="rendite-output-brutto"
+    //    → Kopiert automatisch den Text aus dem referenzierten Element
+    // 4. Falls kein .pdf-container vorhanden → Fallback auf .container-ergebnis
+    //
+    // Beispiel Webflow-Struktur:
+    //
+    // Div (Class: pdf-container is-hidden)
+    // ├── Bild — Logo
+    // ├── H2 — "Renditeberechnung"
+    // ├── Text — data-mirror="rendite-output-brutto" → zeigt "4,52 %"
+    // ├── Text — data-mirror="rendite-output-netto"  → zeigt "3,10 %"
+    // └── Text — "erstellt mit immo-tools.de"
+  
+    // Werte aus Ergebnis in PDF-Container spiegeln
+    _populatePDF(toolName) {
+      const form = this.getForm(toolName);
+      if (!form) return;
+  
+      const pdfContainer = form.querySelector('.pdf-container');
+      if (!pdfContainer) return;
+  
+      // Alle Elemente mit data-mirror finden und Werte kopieren
+      pdfContainer.querySelectorAll('[data-mirror]').forEach(el => {
+        const sourceId = el.getAttribute('data-mirror');
+        const source = document.getElementById(sourceId);
+        if (source) {
+          el.textContent = source.textContent;
+  
+          // Bewertungs-Klassen übernehmen
+          ['is-sehr-gut', 'is-gut', 'is-akzeptabel', 'is-schwach', 'is-positiv', 'is-negativ'].forEach(cls => {
+            if (source.classList.contains(cls)) {
+              el.classList.add(cls);
+            } else {
+              el.classList.remove(cls);
+            }
+          });
+        }
+      });
+  
+      // Aktuelles Datum einfügen (falls Element mit data-pdf="datum" vorhanden)
+      const datumEl = pdfContainer.querySelector('[data-pdf="datum"]');
+      if (datumEl) {
+        datumEl.textContent = new Intl.DateTimeFormat('de-DE', {
+          day: '2-digit', month: '2-digit', year: 'numeric'
+        }).format(new Date());
+      }
+  
+      // Eingabewerte einfügen (falls data-mirror auf Inputs zeigt)
+      pdfContainer.querySelectorAll('[data-mirror-input]').forEach(el => {
+        const sourceId = el.getAttribute('data-mirror-input');
+        const source = document.getElementById(sourceId);
+        if (source) {
+          el.textContent = source.value;
+        }
+      });
+    },
   
     exportPDF(toolName, filename, options = {}) {
-      const container = this.queryTool(toolName, 'container-ergebnis');
-      if (!container) return;
-  
       if (typeof html2pdf === 'undefined') {
         this._showToast('PDF-Export nicht verfügbar');
         return;
       }
+  
+      const form = this.getForm(toolName);
+      if (!form) return;
+  
+      // PDF-Container bevorzugen, sonst Fallback auf Ergebnis
+      let pdfContainer = form.querySelector('.pdf-container');
+      let usePDFContainer = false;
+  
+      if (pdfContainer) {
+        // Werte in PDF-Container kopieren
+        this._populatePDF(toolName);
+        usePDFContainer = true;
+      } else {
+        pdfContainer = form.querySelector('.container-ergebnis');
+      }
+  
+      if (!pdfContainer) return;
   
       if (!filename) {
         filename = `ImmoTools-${toolName}-Ergebnis.pdf`;
       }
   
       const defaultOptions = {
-        margin: [15, 15, 15, 15],
+        margin: [10, 10, 10, 10],
         filename: filename,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
@@ -459,11 +533,28 @@ const ImmoTools = {
   
       this._showToast('PDF wird erstellt...', 3000);
   
+      // Container sichtbar machen für html2canvas
+      if (usePDFContainer) {
+        pdfContainer.classList.remove('is-hidden');
+        pdfContainer.style.position = 'absolute';
+        pdfContainer.style.left = '-9999px';
+        pdfContainer.style.top = '0';
+      }
+  
       html2pdf()
         .set({ ...defaultOptions, ...options })
-        .from(container)
+        .from(pdfContainer)
         .save()
-        .then(() => this._showToast('PDF heruntergeladen!'));
+        .then(() => {
+          // Wieder verstecken
+          if (usePDFContainer) {
+            pdfContainer.classList.add('is-hidden');
+            pdfContainer.style.position = '';
+            pdfContainer.style.left = '';
+            pdfContainer.style.top = '';
+          }
+          this._showToast('PDF heruntergeladen!');
+        });
     },
   
   
@@ -521,46 +612,54 @@ const ImmoTools = {
     // ==========================================
   
     initTool(toolName, berechnungsFn) {
-        const init = () => {
-          const form = this.getForm(toolName);
-          if (!form) {
-            console.warn(`ImmoTools: Form [data-tool="${toolName}"] nicht gefunden`);
-            return;
-          }
-    
-          form.addEventListener('submit', (e) => e.preventDefault());
-    
-          const restoredFromURL = this._restoreFromURL(toolName);
-    
-          if (!restoredFromURL) {
-            this._restoreInputs(toolName);
-          }
-    
-          this._enableAutoSave(toolName);
-          this._initButtons(toolName, berechnungsFn);
-    
-          form.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              this.clearValidation(toolName);
-              this.hideError(toolName);
-              this.hide(toolName, 'container-ergebnis');
-              berechnungsFn();
-            }
-          });
-    
-          if (restoredFromURL) {
+      const init = () => {
+        const form = this.getForm(toolName);
+        if (!form) {
+          console.warn(`ImmoTools: Form [data-tool="${toolName}"] nicht gefunden`);
+          return;
+        }
+  
+        // Form-Submit verhindern
+        form.addEventListener('submit', (e) => e.preventDefault());
+  
+        // 1. URL-Parameter haben höchste Priorität
+        const restoredFromURL = this._restoreFromURL(toolName);
+  
+        // 2. Sonst localStorage wiederherstellen
+        if (!restoredFromURL) {
+          this._restoreInputs(toolName);
+        }
+  
+        // 3. Auto-Save aktivieren
+        this._enableAutoSave(toolName);
+  
+        // 4. Alle Buttons per data-action initialisieren
+        this._initButtons(toolName, berechnungsFn);
+  
+        // 5. Enter-Taste
+        form.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            this.clearValidation(toolName);
+            this.hideError(toolName);
+            this.hide(toolName, 'container-ergebnis');
             berechnungsFn();
           }
-        };
-    
-        // Fix: Falls Seite schon geladen ist, sofort starten
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', init);
-        } else {
-          init();
+        });
+  
+        // 6. Wenn URL-Parameter vorhanden, direkt berechnen
+        if (restoredFromURL) {
+          berechnungsFn();
         }
-      },
+      };
+  
+      // Falls Seite schon geladen ist, sofort starten
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    },
   
     resetTool(toolName) {
       const form = this.getForm(toolName);
@@ -607,4 +706,3 @@ const ImmoTools = {
     maklerProzentKauf: 3.57
   
   };
-  
