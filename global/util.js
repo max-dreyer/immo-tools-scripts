@@ -521,47 +521,46 @@ const ImmoTools = {
     // ==========================================
   
     initTool(toolName, berechnungsFn) {
-      document.addEventListener('DOMContentLoaded', () => {
-        const form = this.getForm(toolName);
-        if (!form) {
-          console.warn(`ImmoTools: Form [data-tool="${toolName}"] nicht gefunden`);
-          return;
-        }
-  
-        // Form-Submit verhindern
-        form.addEventListener('submit', (e) => e.preventDefault());
-  
-        // 1. URL-Parameter haben höchste Priorität
-        const restoredFromURL = this._restoreFromURL(toolName);
-  
-        // 2. Sonst localStorage wiederherstellen
-        if (!restoredFromURL) {
-          this._restoreInputs(toolName);
-        }
-  
-        // 3. Auto-Save aktivieren
-        this._enableAutoSave(toolName);
-  
-        // 4. Alle Buttons per data-action initialisieren
-        this._initButtons(toolName, berechnungsFn);
-  
-        // 5. Enter-Taste
-        form.addEventListener('keypress', (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            this.clearValidation(toolName);
-            this.hideError(toolName);
-            this.hide(toolName, 'container-ergebnis');
+        const init = () => {
+          const form = this.getForm(toolName);
+          if (!form) {
+            console.warn(`ImmoTools: Form [data-tool="${toolName}"] nicht gefunden`);
+            return;
+          }
+    
+          form.addEventListener('submit', (e) => e.preventDefault());
+    
+          const restoredFromURL = this._restoreFromURL(toolName);
+    
+          if (!restoredFromURL) {
+            this._restoreInputs(toolName);
+          }
+    
+          this._enableAutoSave(toolName);
+          this._initButtons(toolName, berechnungsFn);
+    
+          form.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              this.clearValidation(toolName);
+              this.hideError(toolName);
+              this.hide(toolName, 'container-ergebnis');
+              berechnungsFn();
+            }
+          });
+    
+          if (restoredFromURL) {
             berechnungsFn();
           }
-        });
-  
-        // 6. Wenn URL-Parameter vorhanden, direkt berechnen
-        if (restoredFromURL) {
-          berechnungsFn();
+        };
+    
+        // Fix: Falls Seite schon geladen ist, sofort starten
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+        } else {
+          init();
         }
-      });
-    },
+      },
   
     resetTool(toolName) {
       const form = this.getForm(toolName);
